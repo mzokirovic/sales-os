@@ -1,8 +1,10 @@
+import * as bcrypt from 'bcryptjs';
 import { PrismaClient, Role, OrderStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const passwordHash = await bcrypt.hash('123456', 10);
   const tenant = await prisma.tenant.upsert({
     where: {
       id: 'demo-tenant-id',
@@ -15,18 +17,20 @@ async function main() {
   });
 
   const owner = await prisma.user.upsert({
-    where: {
-      phone: '+998901112233',
-    },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      fullName: 'Demo Director',
-      phone: '+998901112233',
-      passwordHash: 'demo-password-hash',
-      role: Role.OWNER,
-    },
-  });
+  where: {
+    phone: '+998901112233',
+  },
+  update: {
+    passwordHash,
+  },
+  create: {
+    tenantId: tenant.id,
+    fullName: 'Demo Director',
+    phone: '+998901112233',
+    passwordHash,
+    role: Role.OWNER,
+  },
+});
 
   let customer = await prisma.customer.findFirst({
     where: {

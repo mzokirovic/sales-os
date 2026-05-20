@@ -1,10 +1,14 @@
+# Dependencies
 node_modules
-# Keep environment variables out of version control
+
+# Build output
+dist
+
+# Environment variables
 .env
 
+# Generated Prisma files
 /generated/prisma
 
-node_modules
-dist
-.env
+# Backup config
 prisma.config.ts.bak
