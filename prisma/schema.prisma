@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  SALES
+  OPERATOR
+  WAREHOUSE
+  DELIVERY
+}
+
+enum OrderStatus {
+  NEW
+  CHECKED
+  CONFIRMED
+  PREPARING
+  SHIPPED
+  DELIVERED
+  PAID
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users      User[]
+  customers  Customer[]
+  orders     Order[]
+  payments   Payment[]
+  activities Activity[]
+}
+
+model User {
+  id       String @id @default(uuid())
+  tenantId String
+
+  fullName     String
+  phone        String @unique
+  passwordHash String
+
+  role Role
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  orders     Order[]
+  activities Activity[]
+}
+
+model Customer {
+  id       String @id @default(uuid())
+  tenantId String
+
+  name    String
+  phone   String?
+  address String?
+
+  lat Float?
+  lng Float?
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  orders Order[]
+}
+
+model Order {
+  id String @id @default(uuid())
+
+  tenantId    String
+  customerId  String
+  createdById String
+
+  status OrderStatus @default(NEW)
+
+  totalAmount Float @default(0)
+  debtAmount  Float @default(0)
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  items    OrderItem[]
+  payments Payment[]
+}
+
+model OrderItem {
+  id String @id @default(uuid())
+
+  orderId String
+
+  productName String
+
+  quantity Float
+  price    Float
+  total    Float
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  tenantId String
+  orderId  String
+
+  amount Float
+
+  paymentMethod String?
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Activity {
+  id String @id @default(uuid())
+
+  tenantId String
+  userId   String
+
+  action String
+
+  entityType String
+  entityId   String
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  user User @relation(fields: [userId], references: [id])
+}
