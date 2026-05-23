@@ -7,6 +7,17 @@ import {
 import { OrderStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+
+const allowedNextStatuses: Record<OrderStatus, OrderStatus[]> = {
+  NEW: [OrderStatus.CHECKED],
+  CHECKED: [OrderStatus.CONFIRMED],
+  CONFIRMED: [OrderStatus.PREPARING],
+  PREPARING: [OrderStatus.SHIPPED],
+  SHIPPED: [OrderStatus.DELIVERED],
+  DELIVERED: [OrderStatus.PAID],
+  PAID: [],
+};
 
 @Injectable()
 export class OrdersService {
@@ -169,5 +180,78 @@ export class OrdersService {
         payments: true,
       },
     });
+  }
+
+  async updateOrderStatus(
+    tenantId: string,
+    role: Role,
+    orderId: string,
+    dto: UpdateOrderStatusDto,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        tenantId,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status === dto.status) {
+      throw new BadRequestException('Order already has this status');
+    }
+
+    const nextStatuses = allowedNextStatuses[order.status];
+
+    if (!nextStatuses.includes(dto.status)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${order.status} → ${dto.status}`,
+      );
+    }
+
+    this.ensureRoleCanMoveToStatus(role, dto.status);
+
+    return this.prisma.order.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        status: dto.status,
+      },
+      include: {
+        customer: true,
+        createdBy: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
+          },
+        },
+        items: true,
+        payments: true,
+      },
+    });
+  }
+
+  private ensureRoleCanMoveToStatus(role: Role, nextStatus: OrderStatus) {
+    if (role === Role.OWNER || role === Role.MANAGER) {
+      return;
+    }
+
+    const allowedStatusesByRole: Partial<Record<Role, OrderStatus[]>> = {
+      OPERATOR: [OrderStatus.CHECKED, OrderStatus.CONFIRMED],
+      WAREHOUSE: [OrderStatus.PREPARING, OrderStatus.SHIPPED],
+      DELIVERY: [OrderStatus.DELIVERED],
+    };
+
+    const allowedStatuses = allowedStatusesByRole[role] ?? [];
+
+    if (!allowedStatuses.includes(nextStatus)) {
+      throw new ForbiddenException(
+        `Role ${role} cannot move order to ${nextStatus}`,
+      );
+    }
   }
 }
