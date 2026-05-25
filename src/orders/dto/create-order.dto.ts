@@ -11,17 +11,22 @@ import {
 } from 'class-validator';
 
 export class CreateOrderItemDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  productName: string;
+  productId?: string;
+
+  @IsOptional()
+  @IsString()
+  productName?: string;
 
   @IsNumber()
   @Min(0.001)
   quantity: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  price: number;
+  price?: number;
 }
 
 export class CreateOrderDto {

@@ -33,6 +33,7 @@ model Tenant {
 
   users      User[]
   customers  Customer[]
+  products   Product[]
   orders     Order[]
   payments   Payment[]
   activities Activity[]
@@ -52,10 +53,12 @@ model User {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
-  orders     Order[]
-  activities Activity[]
-
+  orders           Order[]
+  activities       Activity[]
   createdCustomers Customer[] @relation("CustomerCreatedBy")
+
+  @@index([tenantId])
+  @@index([tenantId, role])
 }
 
 model Customer {
@@ -79,6 +82,31 @@ model Customer {
   createdBy User?  @relation("CustomerCreatedBy", fields: [createdById], references: [id])
 
   orders Order[]
+
+  @@index([tenantId])
+  @@index([tenantId, createdById])
+}
+
+model Product {
+  id       String @id @default(uuid())
+  tenantId String
+
+  name String
+  sku  String?
+  unit String  @default("dona")
+
+  price    Float
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  orderItems OrderItem[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
 }
 
 model Order {
@@ -95,20 +123,24 @@ model Order {
 
   createdAt DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  customer Customer @relation(fields: [customerId], references: [id])
-
-  createdBy User @relation(fields: [createdById], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
 
   items    OrderItem[]
   payments Payment[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, createdById])
+  @@index([tenantId, customerId])
 }
 
 model OrderItem {
   id String @id @default(uuid())
 
-  orderId String
+  orderId   String
+  productId String?
 
   productName String
 
@@ -116,7 +148,11 @@ model OrderItem {
   price    Float
   total    Float
 
-  order Order @relation(fields: [orderId], references: [id])
+  order   Order    @relation(fields: [orderId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model Payment {
@@ -132,8 +168,10 @@ model Payment {
   createdAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  order  Order  @relation(fields: [orderId], references: [id])
 
-  order Order @relation(fields: [orderId], references: [id])
+  @@index([tenantId])
+  @@index([orderId])
 }
 
 model Activity {
@@ -150,6 +188,9 @@ model Activity {
   createdAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
-  user User @relation(fields: [userId], references: [id])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entityType, entityId])
 }

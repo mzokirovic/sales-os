@@ -19,6 +19,14 @@ const allowedNextStatuses: Record<OrderStatus, OrderStatus[]> = {
   PAID: [],
 };
 
+type PreparedOrderItem = {
+  productId?: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  total: number;
+};
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -57,7 +65,11 @@ export class OrdersService {
             role: true,
           },
         },
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         payments: true,
       },
       orderBy: {
@@ -87,7 +99,11 @@ export class OrdersService {
             role: true,
           },
         },
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         payments: true,
       },
     });
@@ -126,12 +142,54 @@ export class OrdersService {
       );
     }
 
-    const items = dto.items.map((item) => ({
-      productName: item.productName,
-      quantity: item.quantity,
-      price: item.price,
-      total: item.quantity * item.price,
-    }));
+    const items: PreparedOrderItem[] = [];
+
+    for (const item of dto.items) {
+      if (item.quantity <= 0) {
+        throw new BadRequestException('Item quantity must be greater than 0');
+      }
+
+      if (item.productId) {
+        const product = await this.prisma.product.findFirst({
+          where: {
+            id: item.productId,
+            tenantId,
+            isActive: true,
+          },
+        });
+
+        if (!product) {
+          throw new NotFoundException('Product not found or inactive');
+        }
+
+        items.push({
+          productId: product.id,
+          productName: product.name,
+          quantity: item.quantity,
+          price: product.price,
+          total: item.quantity * product.price,
+        });
+
+        continue;
+      }
+
+      if (!item.productName || item.price === undefined) {
+        throw new BadRequestException(
+          'Manual item must have productName and price',
+        );
+      }
+
+      if (item.price < 0) {
+        throw new BadRequestException('Item price cannot be negative');
+      }
+
+      items.push({
+        productName: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.quantity * item.price,
+      });
+    }
 
     const totalAmount = items.reduce((sum, item) => sum + item.total, 0);
     const paidAmount = dto.paidAmount ?? 0;
@@ -176,7 +234,11 @@ export class OrdersService {
             role: true,
           },
         },
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         payments: true,
       },
     });
@@ -229,7 +291,11 @@ export class OrdersService {
             role: true,
           },
         },
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         payments: true,
       },
     });
