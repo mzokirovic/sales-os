@@ -11,4 +11,4 @@ dist
 /generated/prisma
 
 # Backup config
-prisma.config.ts.bak
+prisma.config.ts.baktmp/
