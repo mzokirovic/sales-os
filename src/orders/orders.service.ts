@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, Role } from '@prisma/client';
+import { OrderStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -31,11 +31,17 @@ type PreparedOrderItem = {
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listOrders(tenantId: string, userId: string, role: Role) {
-    const where =
-      role === Role.SALES
-        ? { tenantId, createdById: userId }
-        : { tenantId };
+  async listOrders(
+    tenantId: string,
+    userId: string,
+    role: Role,
+    customerId?: string,
+  ) {
+    const where: Prisma.OrderWhereInput = {
+      tenantId,
+      ...(role === Role.SALES ? { createdById: userId } : {}),
+      ...(customerId ? { customerId } : {}),
+    };
 
     return this.prisma.order.findMany({
       where,

@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -31,8 +32,16 @@ export class OrdersController {
     Role.WAREHOUSE,
     Role.DELIVERY,
   )
-  listOrders(@CurrentUser() user: CurrentUserPayload) {
-    return this.ordersService.listOrders(user.tenantId, user.userId, user.role);
+  listOrders(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('customerId') customerId?: string,
+  ) {
+    return this.ordersService.listOrders(
+      user.tenantId,
+      user.userId,
+      user.role,
+      customerId,
+    );
   }
 
   @Get(':id')
