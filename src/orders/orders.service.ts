@@ -478,10 +478,14 @@ export class OrdersService {
   }
 
   private ensureRoleCanAddPayment(role: Role) {
-    const allowedRoles = [Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR];
-
-    if (!allowedRoles.includes(role)) {
-      throw new ForbiddenException(`Role ${role} cannot add payment`);
+    switch (role) {
+      case Role.OWNER:
+      case Role.MANAGER:
+      case Role.SALES:
+      case Role.OPERATOR:
+        return;
+      default:
+        throw new ForbiddenException(`Role ${role} cannot add payment`);
     }
   }
 }
