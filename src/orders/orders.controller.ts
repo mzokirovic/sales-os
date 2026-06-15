@@ -15,6 +15,7 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrdersService } from './orders.service';
 
@@ -79,9 +80,25 @@ export class OrdersController {
     );
   }
 
+  @Post(':id/payments')
+  @Roles(Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR)
+  addPayment(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') orderId: string,
+    @Body() dto: CreatePaymentDto,
+  ) {
+    return this.ordersService.addPayment(
+      user.tenantId,
+      user.userId,
+      user.role,
+      orderId,
+      dto,
+    );
+  }
+
   @Patch(':id/status')
   @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE, Role.DELIVERY)
-  updateStatus(
+  updateOrderStatus(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') orderId: string,
     @Body() dto: UpdateOrderStatusDto,

@@ -7,6 +7,7 @@ import {
 import { OrderStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 const allowedNextStatuses: Record<OrderStatus, OrderStatus[]> = {
@@ -15,7 +16,7 @@ const allowedNextStatuses: Record<OrderStatus, OrderStatus[]> = {
   CONFIRMED: [OrderStatus.PREPARING],
   PREPARING: [OrderStatus.SHIPPED],
   SHIPPED: [OrderStatus.DELIVERED],
-  DELIVERED: [OrderStatus.PAID],
+  DELIVERED: [],
   PAID: [],
 };
 
@@ -26,6 +27,44 @@ type PreparedOrderItem = {
   price: number;
   total: number;
 };
+
+type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+
+type OrderWithPayments = {
+  totalAmount: number;
+  debtAmount: number;
+  payments: { amount: number }[];
+};
+
+function toNumber(value: unknown): number {
+  return Number(value ?? 0);
+}
+
+function addPaymentSummary<T extends OrderWithPayments>(order: T) {
+  const totalAmount = toNumber(order.totalAmount);
+  const paidAmount = order.payments.reduce(
+    (sum, payment) => sum + toNumber(payment.amount),
+    0,
+  );
+  const debtAmount = Math.max(totalAmount - paidAmount, 0);
+
+  let paymentStatus: PaymentStatus = 'UNPAID';
+
+  if (paidAmount > 0 && debtAmount > 0) {
+    paymentStatus = 'PARTIAL';
+  }
+
+  if (paidAmount > 0 && debtAmount === 0) {
+    paymentStatus = 'PAID';
+  }
+
+  return {
+    ...order,
+    paidAmount,
+    debtAmount,
+    paymentStatus,
+  };
+}
 
 @Injectable()
 export class OrdersService {
@@ -43,7 +82,7 @@ export class OrdersService {
       ...(customerId ? { customerId } : {}),
     };
 
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where,
       select: {
         id: true,
@@ -76,12 +115,18 @@ export class OrdersService {
             product: true,
           },
         },
-        payments: true,
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
+
+    return orders.map(addPaymentSummary);
   }
 
   async getOrderById(
@@ -110,7 +155,11 @@ export class OrdersService {
             product: true,
           },
         },
-        payments: true,
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
     });
 
@@ -118,7 +167,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return order;
+    return addPaymentSummary(order);
   }
 
   async createOrder(
@@ -208,7 +257,7 @@ export class OrdersService {
 
     const debtAmount = totalAmount - paidAmount;
 
-    return this.prisma.order.create({
+    const order = await this.prisma.order.create({
       data: {
         tenantId,
         customerId: dto.customerId,
@@ -245,9 +294,104 @@ export class OrdersService {
             product: true,
           },
         },
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    return addPaymentSummary(order);
+  }
+
+  async addPayment(
+    tenantId: string,
+    userId: string,
+    role: Role,
+    orderId: string,
+    dto: CreatePaymentDto,
+  ) {
+    this.ensureRoleCanAddPayment(role);
+
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        tenantId,
+        ...(role === Role.SALES ? { createdById: userId } : {}),
+      },
+      include: {
         payments: true,
       },
     });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const current = addPaymentSummary(order);
+
+    if (current.debtAmount <= 0) {
+      throw new BadRequestException('Order debt is already closed');
+    }
+
+    if (dto.amount > current.debtAmount) {
+      throw new BadRequestException(
+        'Payment amount cannot be greater than current debt',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.create({
+        data: {
+          tenantId,
+          orderId: order.id,
+          amount: dto.amount,
+          paymentMethod: dto.paymentMethod ?? 'cash',
+        },
+      });
+
+      await tx.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          debtAmount: current.debtAmount - dto.amount,
+        },
+      });
+    });
+
+    const updatedOrder = await this.prisma.order.findUnique({
+      where: {
+        id: order.id,
+      },
+      include: {
+        customer: true,
+        createdBy: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
+          },
+        },
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!updatedOrder) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return addPaymentSummary(updatedOrder);
   }
 
   async updateOrderStatus(
@@ -281,7 +425,7 @@ export class OrdersService {
 
     this.ensureRoleCanMoveToStatus(role, dto.status);
 
-    return this.prisma.order.update({
+    const updatedOrder = await this.prisma.order.update({
       where: {
         id: order.id,
       },
@@ -302,9 +446,15 @@ export class OrdersService {
             product: true,
           },
         },
-        payments: true,
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
     });
+
+    return addPaymentSummary(updatedOrder);
   }
 
   private ensureRoleCanMoveToStatus(role: Role, nextStatus: OrderStatus) {
@@ -324,6 +474,14 @@ export class OrdersService {
       throw new ForbiddenException(
         `Role ${role} cannot move order to ${nextStatus}`,
       );
+    }
+  }
+
+  private ensureRoleCanAddPayment(role: Role) {
+    const allowedRoles = [Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR];
+
+    if (!allowedRoles.includes(role)) {
+      throw new ForbiddenException(`Role ${role} cannot add payment`);
     }
   }
 }
