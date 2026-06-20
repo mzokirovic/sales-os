@@ -130,6 +130,62 @@ export class DeliveryService {
     });
   }
 
+  async listMyTrips(tenantId: string, driverId: string) {
+    return this.prisma.deliveryTrip.findMany({
+      where: {
+        tenantId,
+        driverId,
+        status: {
+          in: activeTripStatuses,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        stops: {
+          orderBy: {
+            sortOrder: 'asc',
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+            status: true,
+            deliveredAt: true,
+            order: {
+              select: {
+                id: true,
+                status: true,
+                customer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    address: true,
+                    lat: true,
+                    lng: true,
+                  },
+                },
+                items: {
+                  select: {
+                    id: true,
+                    productName: true,
+                    quantity: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async createTrip(
     tenantId: string,
     assignedById: string,
