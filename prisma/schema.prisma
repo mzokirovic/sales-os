@@ -26,17 +26,32 @@ enum OrderStatus {
   PAID
 }
 
+enum DeliveryTripStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryStopStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
 model Tenant {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
 
-  users      User[]
-  customers  Customer[]
-  products   Product[]
-  orders     Order[]
-  payments   Payment[]
-  activities Activity[]
+  users             User[]
+  customers         Customer[]
+  products          Product[]
+  orders            Order[]
+  payments          Payment[]
+  activities        Activity[]
+  deliveryTrips     DeliveryTrip[]
+  deliveryTripStops DeliveryTripStop[]
 }
 
 model User {
@@ -53,9 +68,11 @@ model User {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
-  orders           Order[]
-  activities       Activity[]
-  createdCustomers Customer[] @relation("CustomerCreatedBy")
+  orders                Order[]
+  activities            Activity[]
+  createdCustomers      Customer[]     @relation("CustomerCreatedBy")
+  deliveryTripsAsDriver DeliveryTrip[] @relation("DeliveryTripDriver")
+  deliveryTripsAssigned DeliveryTrip[] @relation("DeliveryTripAssignedBy")
 
   @@index([tenantId])
   @@index([tenantId, role])
@@ -127,8 +144,9 @@ model Order {
   customer  Customer @relation(fields: [customerId], references: [id])
   createdBy User     @relation(fields: [createdById], references: [id])
 
-  items    OrderItem[]
-  payments Payment[]
+  items         OrderItem[]
+  payments      Payment[]
+  deliveryStops DeliveryTripStop[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -193,4 +211,56 @@ model Activity {
   @@index([tenantId])
   @@index([userId])
   @@index([entityType, entityId])
+}
+
+model DeliveryTrip {
+  id String @id @default(uuid())
+
+  tenantId     String
+  driverId     String
+  assignedById String
+
+  status DeliveryTripStatus @default(PLANNED)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  driver     User   @relation("DeliveryTripDriver", fields: [driverId], references: [id])
+  assignedBy User   @relation("DeliveryTripAssignedBy", fields: [assignedById], references: [id])
+
+  stops DeliveryTripStop[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, driverId])
+  @@index([tenantId, assignedById])
+}
+
+model DeliveryTripStop {
+  id String @id @default(uuid())
+
+  tenantId  String
+  tripId    String
+  orderId   String
+  sortOrder Int
+
+  status DeliveryStopStatus @default(PENDING)
+
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id])
+  trip   DeliveryTrip @relation(fields: [tripId], references: [id])
+  order  Order        @relation(fields: [orderId], references: [id])
+
+  @@unique([tripId, orderId])
+  @@unique([tripId, sortOrder])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, orderId])
+  @@index([tripId])
+  @@index([orderId])
 }
