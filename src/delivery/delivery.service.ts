@@ -74,6 +74,50 @@ export class DeliveryService {
     });
   }
 
+  async listReadyOrders(tenantId: string) {
+    return this.prisma.order.findMany({
+      where: {
+        tenantId,
+        status: {
+          in: ['CONFIRMED', 'PREPARING'],
+        },
+        deliveryStops: {
+          none: {
+            status: {
+              in: ['PENDING', 'DELIVERED'],
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            address: true,
+            lat: true,
+            lng: true,
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            quantity: true,
+          },
+        },
+      },
+    });
+  }
+
   private resolveAvailability(
     trips: Array<{ status: DeliveryTripStatus }>,
   ): DriverAvailability {

@@ -13,6 +13,13 @@ import { DeliveryService } from './delivery.service';
 export class DeliveryController {
   constructor(private readonly deliveryService: DeliveryService) {}
 
+
+  @Get('ready-orders')
+  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
+  listReadyOrders(@CurrentUser() user: CurrentUserPayload) {
+    return this.deliveryService.listReadyOrders(user.tenantId);
+  }
+
   @Get('drivers')
   @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   listDrivers(@CurrentUser() user: CurrentUserPayload) {
