@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 
@@ -30,6 +30,16 @@ export class DeliveryController {
   @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   listDrivers(@CurrentUser() user: CurrentUserPayload) {
     return this.deliveryService.listDrivers(user.tenantId);
+  }
+
+
+  @Post('trips/:id/start')
+  @Roles(Role.DELIVERY)
+  startTrip(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') tripId: string,
+  ) {
+    return this.deliveryService.startTrip(user.tenantId, user.userId, tripId);
   }
 
   @Post('trips')

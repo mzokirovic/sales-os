@@ -186,6 +186,75 @@ export class DeliveryService {
     });
   }
 
+
+  async startTrip(tenantId: string, driverId: string, tripId: string) {
+    const result = await this.prisma.deliveryTrip.updateMany({
+      where: {
+        id: tripId,
+        tenantId,
+        driverId,
+        status: DeliveryTripStatus.PLANNED,
+      },
+      data: {
+        status: DeliveryTripStatus.IN_PROGRESS,
+        startedAt: new Date(),
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new BadRequestException('Delivery trip cannot be started');
+    }
+
+    return this.prisma.deliveryTrip.findFirst({
+      where: {
+        id: tripId,
+        tenantId,
+        driverId,
+      },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        stops: {
+          orderBy: {
+            sortOrder: 'asc',
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+            status: true,
+            deliveredAt: true,
+            order: {
+              select: {
+                id: true,
+                status: true,
+                customer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    address: true,
+                    lat: true,
+                    lng: true,
+                  },
+                },
+                items: {
+                  select: {
+                    id: true,
+                    productName: true,
+                    quantity: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async createTrip(
     tenantId: string,
     assignedById: string,
