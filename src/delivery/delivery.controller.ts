@@ -33,6 +33,16 @@ export class DeliveryController {
   }
 
 
+
+  @Post('stops/:id/deliver')
+  @Roles(Role.DELIVERY)
+  deliverStop(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') stopId: string,
+  ) {
+    return this.deliveryService.deliverStop(user.tenantId, user.userId, stopId);
+  }
+
   @Post('trips/:id/start')
   @Roles(Role.DELIVERY)
   startTrip(

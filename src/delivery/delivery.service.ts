@@ -187,6 +187,126 @@ export class DeliveryService {
   }
 
 
+
+  async deliverStop(tenantId: string, driverId: string, stopId: string) {
+    const stop = await this.prisma.deliveryTripStop.findFirst({
+      where: {
+        id: stopId,
+        tenantId,
+        status: DeliveryStopStatus.PENDING,
+        trip: {
+          tenantId,
+          driverId,
+          status: DeliveryTripStatus.IN_PROGRESS,
+        },
+      },
+      select: {
+        id: true,
+        orderId: true,
+        tripId: true,
+      },
+    });
+
+    if (!stop) {
+      throw new BadRequestException('Delivery stop cannot be delivered');
+    }
+
+    const deliveredAt = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.deliveryTripStop.update({
+        where: {
+          id: stop.id,
+        },
+        data: {
+          status: DeliveryStopStatus.DELIVERED,
+          deliveredAt,
+        },
+      });
+
+      await tx.order.updateMany({
+        where: {
+          id: stop.orderId,
+          tenantId,
+        },
+        data: {
+          status: OrderStatus.DELIVERED,
+        },
+      });
+
+      const remainingPendingStops = await tx.deliveryTripStop.count({
+        where: {
+          tripId: stop.tripId,
+          status: DeliveryStopStatus.PENDING,
+        },
+      });
+
+      if (remainingPendingStops === 0) {
+        await tx.deliveryTrip.updateMany({
+          where: {
+            id: stop.tripId,
+            tenantId,
+            driverId,
+            status: DeliveryTripStatus.IN_PROGRESS,
+          },
+          data: {
+            status: DeliveryTripStatus.COMPLETED,
+            completedAt: deliveredAt,
+          },
+        });
+      }
+
+      return tx.deliveryTrip.findFirst({
+        where: {
+          id: stop.tripId,
+          tenantId,
+          driverId,
+        },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          createdAt: true,
+          stops: {
+            orderBy: {
+              sortOrder: 'asc',
+            },
+            select: {
+              id: true,
+              sortOrder: true,
+              status: true,
+              deliveredAt: true,
+              order: {
+                select: {
+                  id: true,
+                  status: true,
+                  customer: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      address: true,
+                      lat: true,
+                      lng: true,
+                    },
+                  },
+                  items: {
+                    select: {
+                      id: true,
+                      productName: true,
+                      quantity: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  }
+
   async startTrip(tenantId: string, driverId: string, tripId: string) {
     const result = await this.prisma.deliveryTrip.updateMany({
       where: {
