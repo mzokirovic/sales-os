@@ -94,7 +94,7 @@ prepare_ready_order() {
   product_id="$(get_first_id "active products" "$API_URL/products/active" "$token")"
   order_id="$(create_order "$token" "$customer_id" "$product_id")"
 
-  for status in CHECKED CONFIRMED PREPARING; do
+  for status in CHECKED CONFIRMED PREPARING READY; do
     code="$(patch_status "$token" "$order_id" "$status")"
     if [[ "$code" != "200" ]]; then
       echo "Failed to prepare order: order=$order_id status=$status code=$code"
@@ -188,7 +188,7 @@ else:
 echo "✅ Available driver found: $DRIVER_PHONE"
 
 ORDER_ID="$(prepare_ready_order "$OWNER_TOKEN")"
-echo "✅ Test order prepared as PREPARING: $ORDER_ID"
+echo "✅ Test order prepared as READY: $ORDER_ID"
 
 READY_ORDERS_JSON="$(curl -sS "$API_URL/delivery/ready-orders" \
   -H "Authorization: Bearer $OWNER_TOKEN")"
@@ -229,7 +229,7 @@ STOP_ID="$(
 )"
 
 assert_field_equals "$TRIP_JSON" "status" "PLANNED"
-assert_field_equals "$TRIP_JSON" "stops.0.order.status" "PREPARING"
+assert_field_equals "$TRIP_JSON" "stops.0.order.status" "READY"
 echo "✅ Trip created: $TRIP_ID"
 
 DELIVERY_TOKEN="$(login "$DRIVER_PHONE")"

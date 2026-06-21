@@ -14,7 +14,8 @@ const allowedNextStatuses: Record<OrderStatus, OrderStatus[]> = {
   NEW: [OrderStatus.CHECKED],
   CHECKED: [OrderStatus.CONFIRMED],
   CONFIRMED: [OrderStatus.PREPARING],
-  PREPARING: [],
+  PREPARING: [OrderStatus.READY],
+  READY: [],
   SHIPPED: [],
   DELIVERED: [],
   PAID: [],
@@ -464,7 +465,7 @@ export class OrdersService {
 
     const allowedStatusesByRole: Partial<Record<Role, OrderStatus[]>> = {
       OPERATOR: [OrderStatus.CHECKED, OrderStatus.CONFIRMED],
-      WAREHOUSE: [OrderStatus.PREPARING],
+      WAREHOUSE: [OrderStatus.PREPARING, OrderStatus.READY],
       DELIVERY: [],
     };
 

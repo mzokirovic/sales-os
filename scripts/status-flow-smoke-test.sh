@@ -114,9 +114,9 @@ ORDER_OWNER="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
 expect "OWNER NEW → CHECKED" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "CHECKED")" "200"
 expect "OWNER CHECKED → CONFIRMED" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "CONFIRMED")" "200"
 expect "OWNER CONFIRMED → PREPARING" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "PREPARING")" "200"
-expect "OWNER PREPARING → SHIPPED" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "SHIPPED")" "200"
-expect "OWNER SHIPPED → DELIVERED" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "DELIVERED")" "200"
-expect "OWNER DELIVERED → PAID" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "PAID")" "200"
+expect "OWNER PREPARING → READY" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "READY")" "200"
+expect "OWNER cannot READY → SHIPPED through orders endpoint" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "SHIPPED")" "400"
+expect "OWNER cannot READY → PAID" "$(patch_status "$OWNER_TOKEN" "$ORDER_OWNER" "PAID")" "400"
 
 echo
 echo "=== MANAGER full status flow ==="
@@ -124,9 +124,9 @@ ORDER_MANAGER="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
 expect "MANAGER NEW → CHECKED" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "CHECKED")" "200"
 expect "MANAGER CHECKED → CONFIRMED" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "CONFIRMED")" "200"
 expect "MANAGER CONFIRMED → PREPARING" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "PREPARING")" "200"
-expect "MANAGER PREPARING → SHIPPED" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "SHIPPED")" "200"
-expect "MANAGER SHIPPED → DELIVERED" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "DELIVERED")" "200"
-expect "MANAGER DELIVERED → PAID" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "PAID")" "200"
+expect "MANAGER PREPARING → READY" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "READY")" "200"
+expect "MANAGER cannot READY → SHIPPED through orders endpoint" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "SHIPPED")" "400"
+expect "MANAGER cannot READY → PAID" "$(patch_status "$MANAGER_TOKEN" "$ORDER_MANAGER" "PAID")" "400"
 
 echo
 echo "=== OPERATOR allowed flow ==="
@@ -139,13 +139,14 @@ echo "=== WAREHOUSE allowed flow ==="
 ORDER_WAREHOUSE="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
 advance_with_owner "$ORDER_WAREHOUSE" "CHECKED" "CONFIRMED"
 expect "WAREHOUSE CONFIRMED → PREPARING" "$(patch_status "$WAREHOUSE_TOKEN" "$ORDER_WAREHOUSE" "PREPARING")" "200"
-expect "WAREHOUSE PREPARING → SHIPPED" "$(patch_status "$WAREHOUSE_TOKEN" "$ORDER_WAREHOUSE" "SHIPPED")" "200"
+expect "WAREHOUSE PREPARING → READY" "$(patch_status "$WAREHOUSE_TOKEN" "$ORDER_WAREHOUSE" "READY")" "200"
+expect "WAREHOUSE cannot READY → SHIPPED through orders endpoint" "$(patch_status "$WAREHOUSE_TOKEN" "$ORDER_WAREHOUSE" "SHIPPED")" "400"
 
 echo
-echo "=== DELIVERY allowed flow ==="
+echo "=== DELIVERY generic order status is forbidden ==="
 ORDER_DELIVERY="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
-advance_with_owner "$ORDER_DELIVERY" "CHECKED" "CONFIRMED" "PREPARING" "SHIPPED"
-expect "DELIVERY SHIPPED → DELIVERED" "$(patch_status "$DELIVERY_TOKEN" "$ORDER_DELIVERY" "DELIVERED")" "200"
+advance_with_owner "$ORDER_DELIVERY" "CHECKED" "CONFIRMED" "PREPARING" "READY"
+expect "DELIVERY cannot move READY → SHIPPED through orders endpoint" "$(patch_status "$DELIVERY_TOKEN" "$ORDER_DELIVERY" "SHIPPED")" "403"
 
 echo
 echo "=== Forbidden role transitions ==="
@@ -164,9 +165,9 @@ ORDER_DELIVERY_FORBIDDEN="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT
 advance_with_owner "$ORDER_DELIVERY_FORBIDDEN" "CHECKED" "CONFIRMED" "PREPARING"
 expect "DELIVERY cannot move PREPARING → SHIPPED" "$(patch_status "$DELIVERY_TOKEN" "$ORDER_DELIVERY_FORBIDDEN" "SHIPPED")" "403"
 
-ORDER_DELIVERY_PAID_FORBIDDEN="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
-advance_with_owner "$ORDER_DELIVERY_PAID_FORBIDDEN" "CHECKED" "CONFIRMED" "PREPARING" "SHIPPED" "DELIVERED"
-expect "DELIVERY cannot move DELIVERED → PAID" "$(patch_status "$DELIVERY_TOKEN" "$ORDER_DELIVERY_PAID_FORBIDDEN" "PAID")" "403"
+ORDER_DELIVERY_DELIVERED_FORBIDDEN="$(create_order "$OWNER_TOKEN" "$CUSTOMER_ID" "$PRODUCT_ID")"
+advance_with_owner "$ORDER_DELIVERY_DELIVERED_FORBIDDEN" "CHECKED" "CONFIRMED" "PREPARING" "READY"
+expect "DELIVERY cannot move READY → DELIVERED through orders endpoint" "$(patch_status "$DELIVERY_TOKEN" "$ORDER_DELIVERY_DELIVERED_FORBIDDEN" "DELIVERED")" "403"
 
 echo
 echo "=== Invalid transitions ==="

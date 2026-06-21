@@ -172,14 +172,17 @@ expect_code "OPERATOR cannot CONFIRMED -> PREPARING" "$CODE" 403
 CODE=$(http_code PATCH "/orders/$ORDER_ID/status" "$WAREHOUSE_TOKEN" '{"status":"PREPARING"}')
 expect_code "WAREHOUSE can CONFIRMED -> PREPARING" "$CODE" 200 201
 
+CODE=$(http_code PATCH "/orders/$ORDER_ID/status" "$WAREHOUSE_TOKEN" '{"status":"READY"}')
+expect_code "WAREHOUSE can PREPARING -> READY" "$CODE" 200 201
+
 CODE=$(http_code PATCH "/orders/$ORDER_ID/status" "$WAREHOUSE_TOKEN" '{"status":"SHIPPED"}')
-expect_code "WAREHOUSE can PREPARING -> SHIPPED" "$CODE" 200 201
+expect_code "WAREHOUSE cannot READY -> SHIPPED through orders endpoint" "$CODE" 400 403
 
 CODE=$(http_code PATCH "/orders/$ORDER_ID/status" "$DELIVERY_TOKEN" '{"status":"DELIVERED"}')
-expect_code "DELIVERY can SHIPPED -> DELIVERED" "$CODE" 200 201
+expect_code "DELIVERY cannot update generic order status" "$CODE" 403
 
 CODE=$(http_code PATCH "/orders/$ORDER_ID/status" "$OWNER_TOKEN" '{"status":"PAID"}')
-expect_code "OWNER cannot DELIVERED -> PAID fulfillment status" "$CODE" 400
+expect_code "OWNER cannot READY -> PAID fulfillment status" "$CODE" 400
 
 CODE=$(http_code POST "/orders/$ORDER_ID/payments" "$WAREHOUSE_TOKEN" '{"amount":1,"paymentMethod":"cash"}')
 expect_code "WAREHOUSE cannot add payment" "$CODE" 403

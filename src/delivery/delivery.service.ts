@@ -156,7 +156,7 @@ export class DeliveryService {
     return this.prisma.order.findMany({
       where: {
         tenantId,
-        status: OrderStatus.PREPARING,
+        status: OrderStatus.READY,
         deliveryStops: {
           none: {
             status: DeliveryStopStatus.PENDING,
@@ -402,9 +402,7 @@ export class DeliveryService {
         throw new BadRequestException('Delivery trip cannot be started');
       }
 
-      if (
-        trip.stops.some((stop) => stop.order.status !== OrderStatus.PREPARING)
-      ) {
+      if (trip.stops.some((stop) => stop.order.status !== OrderStatus.READY)) {
         throw new BadRequestException(
           'Delivery trip has orders that are not ready',
         );
@@ -429,7 +427,7 @@ export class DeliveryService {
           id: {
             in: orderIds,
           },
-          status: OrderStatus.PREPARING,
+          status: OrderStatus.READY,
         },
         data: {
           status: OrderStatus.SHIPPED,
@@ -657,7 +655,7 @@ export class DeliveryService {
     }
 
     for (const order of orders) {
-      if (order.status !== OrderStatus.PREPARING) {
+      if (order.status !== OrderStatus.READY) {
         throw new BadRequestException(
           `Order ${order.id} is not ready for delivery`,
         );
