@@ -20,6 +20,70 @@ const activeTripStatuses = [
 export class DeliveryService {
   constructor(private readonly prisma: PrismaService) {}
 
+
+  async listTrips(tenantId: string) {
+    return this.prisma.deliveryTrip.findMany({
+      where: {
+        tenantId,
+        status: {
+          in: activeTripStatuses,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        driver: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            role: true,
+          },
+        },
+        stops: {
+          orderBy: {
+            sortOrder: 'asc',
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+            status: true,
+            deliveredAt: true,
+            order: {
+              select: {
+                id: true,
+                status: true,
+                customer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    address: true,
+                    lat: true,
+                    lng: true,
+                  },
+                },
+                items: {
+                  select: {
+                    id: true,
+                    productName: true,
+                    quantity: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async listDrivers(tenantId: string) {
     const drivers = await this.prisma.user.findMany({
       where: {
