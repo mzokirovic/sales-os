@@ -56,6 +56,15 @@ export class DeliveryController {
     return this.deliveryService.startTrip(user.tenantId, user.userId, tripId);
   }
 
+  @Post('trips/:id/cancel')
+  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
+  cancelTrip(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') tripId: string,
+  ) {
+    return this.deliveryService.cancelTrip(user.tenantId, tripId);
+  }
+
   @Post('trips')
   @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   createTrip(

@@ -138,8 +138,9 @@ export class DeliveryService {
       const activeStopsCount = trips.reduce(
         (sum, trip) =>
           sum +
-          trip.stops.filter((stop) => stop.status === DeliveryStopStatus.PENDING)
-            .length,
+          trip.stops.filter(
+            (stop) => stop.status === DeliveryStopStatus.PENDING,
+          ).length,
         0,
       );
 
@@ -401,8 +402,12 @@ export class DeliveryService {
         throw new BadRequestException('Delivery trip cannot be started');
       }
 
-      if (trip.stops.some((stop) => stop.order.status !== OrderStatus.PREPARING)) {
-        throw new BadRequestException('Delivery trip has orders that are not ready');
+      if (
+        trip.stops.some((stop) => stop.order.status !== OrderStatus.PREPARING)
+      ) {
+        throw new BadRequestException(
+          'Delivery trip has orders that are not ready',
+        );
       }
 
       const startedAt = new Date();
@@ -443,6 +448,107 @@ export class DeliveryService {
           startedAt: true,
           completedAt: true,
           createdAt: true,
+          stops: {
+            orderBy: {
+              sortOrder: 'asc',
+            },
+            select: {
+              id: true,
+              sortOrder: true,
+              status: true,
+              deliveredAt: true,
+              order: {
+                select: {
+                  id: true,
+                  status: true,
+                  customer: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      address: true,
+                      lat: true,
+                      lng: true,
+                    },
+                  },
+                  items: {
+                    select: {
+                      id: true,
+                      productName: true,
+                      quantity: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  }
+
+  async cancelTrip(tenantId: string, tripId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const trip = await tx.deliveryTrip.findFirst({
+        where: {
+          id: tripId,
+          tenantId,
+          status: DeliveryTripStatus.PLANNED,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!trip) {
+        throw new BadRequestException(
+          'Only planned delivery trips can be cancelled',
+        );
+      }
+
+      const cancelledAt = new Date();
+
+      await tx.deliveryTrip.update({
+        where: {
+          id: trip.id,
+        },
+        data: {
+          status: DeliveryTripStatus.CANCELLED,
+          cancelledAt,
+        },
+      });
+
+      await tx.deliveryTripStop.updateMany({
+        where: {
+          tenantId,
+          tripId: trip.id,
+          status: DeliveryStopStatus.PENDING,
+        },
+        data: {
+          status: DeliveryStopStatus.FAILED,
+        },
+      });
+
+      return tx.deliveryTrip.findFirst({
+        where: {
+          id: trip.id,
+          tenantId,
+        },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          cancelledAt: true,
+          createdAt: true,
+          driver: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              role: true,
+            },
+          },
           stops: {
             orderBy: {
               sortOrder: 'asc',
