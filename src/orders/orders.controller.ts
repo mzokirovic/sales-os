@@ -25,14 +25,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
-  @Roles(
-    Role.OWNER,
-    Role.MANAGER,
-    Role.SALES,
-    Role.OPERATOR,
-    Role.WAREHOUSE,
-    Role.DELIVERY,
-  )
+  @Roles(Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR, Role.WAREHOUSE)
   listOrders(
     @CurrentUser() user: CurrentUserPayload,
     @Query('customerId') customerId?: string,
@@ -46,14 +39,7 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @Roles(
-    Role.OWNER,
-    Role.MANAGER,
-    Role.SALES,
-    Role.OPERATOR,
-    Role.WAREHOUSE,
-    Role.DELIVERY,
-  )
+  @Roles(Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR, Role.WAREHOUSE)
   getOrder(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') orderId: string,
@@ -97,7 +83,7 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
-  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE, Role.DELIVERY)
+  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   updateOrderStatus(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') orderId: string,
