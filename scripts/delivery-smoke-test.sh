@@ -17,6 +17,94 @@ login() {
     | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])"
 }
 
+
+status_code() {
+  local method="$1"
+  local url="$2"
+  local token="$3"
+  local body="${4:-}"
+
+  if [[ -n "$body" ]]; then
+    curl -sS -o /dev/null -w "%{http_code}" -X "$method" "$url" \
+      -H "Authorization: Bearer $token" \
+      -H "Content-Type: application/json" \
+      -d "$body"
+  else
+    curl -sS -o /dev/null -w "%{http_code}" -X "$method" "$url" \
+      -H "Authorization: Bearer $token"
+  fi
+}
+
+patch_status() {
+  local token="$1"
+  local order_id="$2"
+  local status="$3"
+
+  status_code PATCH "$API_URL/orders/$order_id/status" "$token" "{\"status\":\"$status\"}"
+}
+
+get_first_id() {
+  local label="$1"
+  local url="$2"
+  local token="$3"
+
+  curl -sS "$url" \
+    -H "Authorization: Bearer $token" \
+    | LABEL="$label" python3 -c '
+import os, sys, json
+
+label = os.environ["LABEL"]
+data = json.load(sys.stdin)
+
+if not isinstance(data, list) or not data:
+    raise SystemExit(f"No {label} found")
+
+print(data[0]["id"])
+'
+}
+
+create_order() {
+  local token="$1"
+  local customer_id="$2"
+  local product_id="$3"
+
+  curl -sS -X POST "$API_URL/orders" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "{\"customerId\":\"$customer_id\",\"items\":[{\"productId\":\"$product_id\",\"quantity\":1}],\"paidAmount\":0}" \
+    | python3 -c '
+import sys, json
+
+data = json.load(sys.stdin)
+if "id" not in data:
+    raise SystemExit(f"Order create failed: {data}")
+
+print(data["id"])
+'
+}
+
+prepare_ready_order() {
+  local token="$1"
+  local customer_id
+  local product_id
+  local order_id
+  local code
+
+  customer_id="$(get_first_id "customers" "$API_URL/customers" "$token")"
+  product_id="$(get_first_id "active products" "$API_URL/products/active" "$token")"
+  order_id="$(create_order "$token" "$customer_id" "$product_id")"
+
+  for status in CHECKED CONFIRMED PREPARING; do
+    code="$(patch_status "$token" "$order_id" "$status")"
+    if [[ "$code" != "200" ]]; then
+      echo "Failed to prepare order: order=$order_id status=$status code=$code"
+      exit 1
+    fi
+  done
+
+  echo "$order_id"
+}
+
 assert_no_money_fields() {
   local payload="$1"
 
@@ -99,21 +187,23 @@ else:
 
 echo "✅ Available driver found: $DRIVER_PHONE"
 
+ORDER_ID="$(prepare_ready_order "$OWNER_TOKEN")"
+echo "✅ Test order prepared as PREPARING: $ORDER_ID"
+
 READY_ORDERS_JSON="$(curl -sS "$API_URL/delivery/ready-orders" \
   -H "Authorization: Bearer $OWNER_TOKEN")"
 
-ORDER_ID="$(
-  printf '%s' "$READY_ORDERS_JSON" | python3 -c '
-import sys, json
+printf '%s' "$READY_ORDERS_JSON" | ORDER_ID="$ORDER_ID" python3 -c '
+import os, sys, json
 
+order_id = os.environ["ORDER_ID"]
 orders = json.load(sys.stdin)
-if not orders:
-    raise SystemExit("No ready orders found")
-print(orders[0]["id"])
-'
-)"
 
-echo "✅ Ready order found: $ORDER_ID"
+if not any(order.get("id") == order_id for order in orders):
+    raise SystemExit(f"Prepared order not found in ready orders: {order_id}")
+'
+
+echo "✅ Prepared order is visible in ready orders"
 
 CREATE_BODY="$(
   DRIVER_ID="$DRIVER_ID" ORDER_ID="$ORDER_ID" python3 -c '
