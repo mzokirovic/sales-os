@@ -139,6 +139,7 @@ STOP_ID="$(
 )"
 
 assert_field_equals "$TRIP_JSON" "status" "PLANNED"
+assert_field_equals "$TRIP_JSON" "stops.0.order.status" "PREPARING"
 echo "✅ Trip created: $TRIP_ID"
 
 DELIVERY_TOKEN="$(login "$DRIVER_PHONE")"
@@ -172,8 +173,9 @@ START_JSON="$(curl -sS -X POST "$API_URL/delivery/trips/$TRIP_ID/start" \
   -H "Authorization: Bearer $DELIVERY_TOKEN")"
 
 assert_field_equals "$START_JSON" "status" "IN_PROGRESS"
+assert_field_equals "$START_JSON" "stops.0.order.status" "SHIPPED"
 assert_no_money_fields "$START_JSON"
-echo "✅ Trip started"
+echo "✅ Trip started and order moved to SHIPPED"
 
 DELIVER_JSON="$(curl -sS -X POST "$API_URL/delivery/stops/$STOP_ID/deliver" \
   -H "Authorization: Bearer $DELIVERY_TOKEN")"

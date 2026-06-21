@@ -20,7 +20,6 @@ const activeTripStatuses = [
 export class DeliveryService {
   constructor(private readonly prisma: PrismaService) {}
 
-
   async listTrips(tenantId: string) {
     return this.prisma.deliveryTrip.findMany({
       where: {
@@ -156,9 +155,7 @@ export class DeliveryService {
     return this.prisma.order.findMany({
       where: {
         tenantId,
-        status: {
-          in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING],
-        },
+        status: OrderStatus.PREPARING,
         deliveryStops: {
           none: {
             status: DeliveryStopStatus.PENDING,
@@ -250,14 +247,15 @@ export class DeliveryService {
     });
   }
 
-
-
   async deliverStop(tenantId: string, driverId: string, stopId: string) {
     const stop = await this.prisma.deliveryTripStop.findFirst({
       where: {
         id: stopId,
         tenantId,
         status: DeliveryStopStatus.PENDING,
+        order: {
+          status: OrderStatus.SHIPPED,
+        },
         trip: {
           tenantId,
           driverId,
@@ -292,6 +290,7 @@ export class DeliveryService {
         where: {
           id: stop.orderId,
           tenantId,
+          status: OrderStatus.SHIPPED,
         },
         data: {
           status: OrderStatus.DELIVERED,
@@ -372,70 +371,114 @@ export class DeliveryService {
   }
 
   async startTrip(tenantId: string, driverId: string, tripId: string) {
-    const result = await this.prisma.deliveryTrip.updateMany({
-      where: {
-        id: tripId,
-        tenantId,
-        driverId,
-        status: DeliveryTripStatus.PLANNED,
-      },
-      data: {
-        status: DeliveryTripStatus.IN_PROGRESS,
-        startedAt: new Date(),
-      },
-    });
-
-    if (result.count !== 1) {
-      throw new BadRequestException('Delivery trip cannot be started');
-    }
-
-    return this.prisma.deliveryTrip.findFirst({
-      where: {
-        id: tripId,
-        tenantId,
-        driverId,
-      },
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        completedAt: true,
-        createdAt: true,
-        stops: {
-          orderBy: {
-            sortOrder: 'asc',
-          },
-          select: {
-            id: true,
-            sortOrder: true,
-            status: true,
-            deliveredAt: true,
-            order: {
-              select: {
-                id: true,
-                status: true,
-                customer: {
-                  select: {
-                    id: true,
-                    name: true,
-                    phone: true,
-                    address: true,
-                    lat: true,
-                    lng: true,
-                  },
+    return this.prisma.$transaction(async (tx) => {
+      const trip = await tx.deliveryTrip.findFirst({
+        where: {
+          id: tripId,
+          tenantId,
+          driverId,
+          status: DeliveryTripStatus.PLANNED,
+        },
+        select: {
+          id: true,
+          stops: {
+            where: {
+              status: DeliveryStopStatus.PENDING,
+            },
+            select: {
+              orderId: true,
+              order: {
+                select: {
+                  status: true,
                 },
-                items: {
-                  select: {
-                    id: true,
-                    productName: true,
-                    quantity: true,
+              },
+            },
+          },
+        },
+      });
+
+      if (!trip || trip.stops.length === 0) {
+        throw new BadRequestException('Delivery trip cannot be started');
+      }
+
+      if (trip.stops.some((stop) => stop.order.status !== OrderStatus.PREPARING)) {
+        throw new BadRequestException('Delivery trip has orders that are not ready');
+      }
+
+      const startedAt = new Date();
+      const orderIds = trip.stops.map((stop) => stop.orderId);
+
+      await tx.deliveryTrip.update({
+        where: {
+          id: trip.id,
+        },
+        data: {
+          status: DeliveryTripStatus.IN_PROGRESS,
+          startedAt,
+        },
+      });
+
+      await tx.order.updateMany({
+        where: {
+          tenantId,
+          id: {
+            in: orderIds,
+          },
+          status: OrderStatus.PREPARING,
+        },
+        data: {
+          status: OrderStatus.SHIPPED,
+        },
+      });
+
+      return tx.deliveryTrip.findFirst({
+        where: {
+          id: trip.id,
+          tenantId,
+          driverId,
+        },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          createdAt: true,
+          stops: {
+            orderBy: {
+              sortOrder: 'asc',
+            },
+            select: {
+              id: true,
+              sortOrder: true,
+              status: true,
+              deliveredAt: true,
+              order: {
+                select: {
+                  id: true,
+                  status: true,
+                  customer: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      address: true,
+                      lat: true,
+                      lng: true,
+                    },
+                  },
+                  items: {
+                    select: {
+                      id: true,
+                      productName: true,
+                      quantity: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
+      });
     });
   }
 
@@ -508,10 +551,7 @@ export class DeliveryService {
     }
 
     for (const order of orders) {
-      if (
-        order.status !== OrderStatus.CONFIRMED &&
-        order.status !== OrderStatus.PREPARING
-      ) {
+      if (order.status !== OrderStatus.PREPARING) {
         throw new BadRequestException(
           `Order ${order.id} is not ready for delivery`,
         );

@@ -14,7 +14,6 @@ import { DeliveryService } from './delivery.service';
 export class DeliveryController {
   constructor(private readonly deliveryService: DeliveryService) {}
 
-
   @Get('trips')
   @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   listTrips(@CurrentUser() user: CurrentUserPayload) {
@@ -39,8 +38,6 @@ export class DeliveryController {
     return this.deliveryService.listDrivers(user.tenantId);
   }
 
-
-
   @Post('stops/:id/deliver')
   @Roles(Role.DELIVERY)
   deliverStop(
@@ -60,7 +57,7 @@ export class DeliveryController {
   }
 
   @Post('trips')
-  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR)
+  @Roles(Role.OWNER, Role.MANAGER, Role.OPERATOR, Role.WAREHOUSE)
   createTrip(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateDeliveryTripDto,
