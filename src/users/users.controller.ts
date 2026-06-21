@@ -20,11 +20,11 @@ export class UsersController {
   }
 
   @Post()
-  @Roles(Role.OWNER)
+  @Roles(Role.OWNER, Role.MANAGER)
   createUser(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateUserDto,
   ) {
-    return this.usersService.createEmployee(user.tenantId, dto);
+    return this.usersService.createEmployee(user.tenantId, user.role, dto);
   }
 }

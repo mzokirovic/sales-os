@@ -1,12 +1,28 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+
+const OWNER_CREATABLE_ROLES: Role[] = [
+  Role.MANAGER,
+  Role.SALES,
+  Role.OPERATOR,
+  Role.WAREHOUSE,
+  Role.DELIVERY,
+];
+
+const MANAGER_CREATABLE_ROLES: Role[] = [
+  Role.SALES,
+  Role.OPERATOR,
+  Role.WAREHOUSE,
+  Role.DELIVERY,
+];
 
 @Injectable()
 export class UsersService {
@@ -43,32 +59,57 @@ export class UsersService {
         role: true,
         createdAt: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [
+        {
+          role: 'asc',
+        },
+        {
+          createdAt: 'desc',
+        },
+      ],
     });
   }
 
-  async createEmployee(tenantId: string, dto: CreateUserDto) {
-    if (dto.role === Role.OWNER) {
-      throw new BadRequestException('OWNER cannot be created from this endpoint');
+  async createEmployee(tenantId: string, actorRole: Role, dto: CreateUserDto) {
+    const fullName = dto.fullName.trim();
+    const phone = dto.phone.trim();
+    const password = dto.password.trim();
+
+    if (!fullName) {
+      throw new BadRequestException('Full name is required');
+    }
+
+    if (!phone) {
+      throw new BadRequestException('Phone is required');
+    }
+
+    if (password.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters');
+    }
+
+    const allowedRoles = this.getCreatableRoles(actorRole);
+
+    if (!allowedRoles.includes(dto.role)) {
+      throw new ForbiddenException(
+        `${actorRole} cannot create ${dto.role} users`,
+      );
     }
 
     const existingUser = await this.prisma.user.findUnique({
-      where: { phone: dto.phone },
+      where: { phone },
     });
 
     if (existingUser) {
       throw new ConflictException('User with this phone already exists');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     return this.prisma.user.create({
       data: {
         tenantId,
-        fullName: dto.fullName,
-        phone: dto.phone,
+        fullName,
+        phone,
         passwordHash,
         role: dto.role,
       },
@@ -81,5 +122,17 @@ export class UsersService {
         createdAt: true,
       },
     });
+  }
+
+  private getCreatableRoles(actorRole: Role): Role[] {
+    if (actorRole === Role.OWNER) {
+      return OWNER_CREATABLE_ROLES;
+    }
+
+    if (actorRole === Role.MANAGER) {
+      return MANAGER_CREATABLE_ROLES;
+    }
+
+    return [];
   }
 }
