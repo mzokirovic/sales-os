@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+function canViewMoney(role: Role) {
+  return role === Role.OWNER || role === Role.MANAGER;
+}
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(tenantId: string) {
+  async getSummary(tenantId: string, role: Role) {
+    const moneyAllowed = canViewMoney(role);
+
     const [
       ordersAggregate,
       customersCount,
@@ -23,10 +29,14 @@ export class DashboardService {
         _count: {
           _all: true,
         },
-        _sum: {
-          totalAmount: true,
-          debtAmount: true,
-        },
+        ...(moneyAllowed
+          ? {
+              _sum: {
+                totalAmount: true,
+                debtAmount: true,
+              },
+            }
+          : {}),
       }),
 
       this.prisma.customer.count({
@@ -76,8 +86,12 @@ export class DashboardService {
         select: {
           id: true,
           status: true,
-          totalAmount: true,
-          debtAmount: true,
+          ...(moneyAllowed
+            ? {
+                totalAmount: true,
+                debtAmount: true,
+              }
+            : {}),
           createdAt: true,
           customer: {
             select: {
@@ -99,8 +113,12 @@ export class DashboardService {
               id: true,
               productName: true,
               quantity: true,
-              price: true,
-              total: true,
+              ...(moneyAllowed
+                ? {
+                    price: true,
+                    total: true,
+                  }
+                : {}),
             },
           },
         },
@@ -108,8 +126,13 @@ export class DashboardService {
     ]);
 
     return {
-      totalSales: ordersAggregate._sum.totalAmount ?? 0,
-      openDebt: ordersAggregate._sum.debtAmount ?? 0,
+      canViewMoney: moneyAllowed,
+      ...(moneyAllowed
+        ? {
+            totalSales: ordersAggregate._sum?.totalAmount ?? 0,
+            openDebt: ordersAggregate._sum?.debtAmount ?? 0,
+          }
+        : {}),
       ordersCount: ordersAggregate._count._all,
       customersCount,
       productsCount,

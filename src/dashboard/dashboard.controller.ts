@@ -15,6 +15,6 @@ export class DashboardController {
   @Get('summary')
   @Roles(Role.OWNER, Role.MANAGER, Role.SALES, Role.OPERATOR, Role.WAREHOUSE)
   getSummary(@CurrentUser() user: CurrentUserPayload) {
-    return this.dashboardService.getSummary(user.tenantId);
+    return this.dashboardService.getSummary(user.tenantId, user.role);
   }
 }
